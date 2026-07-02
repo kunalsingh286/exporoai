@@ -1,0 +1,421 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+import { GoogleGenAI } from '@google/genai';
+
+// Mapped into server configurations via runtime env keys
+const aiStudio = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized payload exception' }, { status: 401 });
+    }
+
+    const formData = await req.formData();
+    const profileId = user.id; // Force RLS compliance
+    const flowType = formData.get('flowType') as 'GOODS_PHYSICAL' | 'SERVICES_INTANGIBLE';
+    const files = formData.getAll('files') as File[];
+
+    if (!flowType || files.length === 0) {
+      return NextResponse.json({ error: 'Missing mandatory payload properties' }, { status: 400 });
+    }
+
+    // TASK 3.1: Initialize transaction entry inside Supabase to yield immediate execution row trace ID
+    const { data: txn, error: txnInsertError } = await supabase
+      .from('transactions')
+      .insert({
+        profile_id: profileId,
+        flow_type: flowType,
+        status: 'PARSING',
+        raw_payload_context: { total_ingested_files: files.length }
+      })
+      .select()
+      .single();
+
+    if (txnInsertError || !txn) {
+      console.error("Txn Insert Error: ", txnInsertError);
+      return NextResponse.json({ error: 'Failed to provision tracking state row context: ' + (txnInsertError?.message || 'Unknown') }, { status: 500 });
+    }
+
+    // FLUSH IMMEDIATE 202 ACCEPTED CONTAINER PACKET BACK TO CLIENT
+    // Bypasses synchronous request timeout limitations on cloud infrastructure
+    const backgroundTaskLoop = async () => {
+      try {
+        let aggregatedTextContext = '';
+        let fileDataUrls: { name: string, type: string, url: string, path: string }[] = [];
+
+        for (const file of files) {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const fileType = file.type;
+          const fileName = file.name;
+
+          // Upload to Supabase Storage Bucket securely via RLS
+          const safeName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
+          const filePath = `${profileId}/${safeName}`;
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('trade-assets')
+            .upload(filePath, buffer, {
+              contentType: fileType,
+              upsert: false
+            });
+
+          if (uploadError) {
+            console.error('Storage Upload Error:', uploadError);
+            throw new Error('Failed to persist unstructured asset to vault storage.');
+          }
+
+          // Generate a signed URL for Dashboard viewing without base64 bloat
+          const { data: signedUrlData } = await supabase.storage
+            .from('trade-assets')
+            .createSignedUrl(uploadData.path, 60 * 60 * 24 * 7); // 7 days valid
+
+          fileDataUrls.push({ 
+            name: fileName, 
+            type: fileType, 
+            url: signedUrlData?.signedUrl || '', 
+            path: uploadData.path 
+          });
+
+          aggregatedTextContext += `\n--- File Content Fragment: ${file.name} ---\n`;
+          aggregatedTextContext += buffer.toString('utf-8'); // Read ASCII logs/text fields
+        }
+
+        // Target Output Instructions perfectly matched to schemas
+        const targetOutputInstruction = flowType === 'GOODS_PHYSICAL'
+          ? `{\n  "header": {\n    "schema_version": "2026.1",\n    "message_id": "CACHE01",\n    "custom_house_code": "",\n    "job_number": 0,\n    "job_date": ""\n  },\n  "exporter_profile": {\n    "iec_code": "",\n    "pan_number": "",\n    "gstin": "",\n    "exporter_name": "",\n    "exporter_type": "",\n    "exporter_address": {\n      "line1": "",\n      "line2": "",\n      "city": "",\n      "state_code": "",\n      "pin_code": ""\n    }\n  },\n  "consignment_metadata": {\n    "port_of_loading_locode": "",\n    "port_of_discharge_locode": "",\n    "country_of_destination_code": "",\n    "authorized_dealer_ad_code": "",\n    "state_of_origin": ""\n  },\n  "invoice_master": [\n    {\n      "commercial_invoice_number": "",\n      "invoice_date": "",\n      "purchase_order_reference": "",\n      "incoterms": "",\n      "currency_code": "",\n      "total_invoice_value": 0.0,\n      "freight_charges": 0.0,\n      "insurance_charges": 0.0,\n      "miscellaneous_charges": 0.0,\n      "line_items": [\n        {\n          "item_sequence": 0,\n          "hs_code_8digit": "",\n          "commercial_description": "",\n          "quantity": 0,\n          "unit_of_measurement_uqc": "",\n          "unit_price": 0.0,\n          "line_total_fob": 0.0,\n          "incentive_declarations": {\n            "claim_rodtep": false,\n            "claim_drawback": false,\n            "drawback_serial_number": ""\n          }\n        }\n      ]\n    }\n  ],\n  "esanchit_supporting_documents": [\n    {\n      "document_sequence": 0,\n      "document_type_code": "",\n      "image_reference_number_irn": ""\n    }\n  ]\n}`
+          : `{\n  "edf_header": {\n    "framework_version": "FEMA_2026_UNIFIED",\n    "corporate_pan": "",\n    "iec_code": ""\n  },\n  "invoice_record": {\n    "invoice_number": "",\n    "invoice_date": "",\n    "contracted_currency": "",\n    "invoice_value_foreign_currency": 0.0,\n    "invoice_value_inr": 0.0,\n    "purpose_code_rbi": ""\n  },\n  "bank_remittance_firc_node": {\n    "inward_remittance_reference_number": "",\n    "realization_date": "",\n    "remitted_currency": "",\n    "gross_amount_received_foreign_currency": 0.0,\n    "intermediary_bank_deductions": 0.0,\n    "net_amount_credited_inr": 0.0,\n    "authorized_dealer_bank_code": ""\n  },\n  "reconciliation_analytics": {\n    "calculated_variance_percentage": 0.0,\n    "spread_exception_triggered": false,\n    "small_value_threshold_bypass": false\n  },\n  "compliance_outputs": {\n    "gst_rfd01_payload_ready": false,\n    "edpms_token_closure_status": ""\n  }\n}`;
+
+        const systemInstruction = `You are the primary schema synthesis core for ExporoAI, an enterprise cross-border operating system running under 2026 Indian regulatory rules. Analyze the provided unstructured trade assets character-by-character. Extract all available trade parameters. Do not assume or guess values; if a parameter is missing, return an empty string. Programmatically evaluate conversion fees to see if they break the +/-0.5% FEMA boundary. Your absolute requirement is to output a valid JSON object that adheres strictly to the specified target schema:
+
+${targetOutputInstruction}`;
+
+        const icegateSchema = {
+          type: "OBJECT",
+          properties: {
+            header: {
+              type: "OBJECT",
+              properties: {
+                schema_version: { type: "STRING", enum: ["2026.1"] },
+                message_id: { type: "STRING", enum: ["CACHE01"] },
+                custom_house_code: { type: "STRING" },
+                job_number: { type: "NUMBER" },
+                job_date: { type: "STRING" }
+              }
+            },
+            exporter_profile: {
+              type: "OBJECT",
+              properties: {
+                iec_code: { type: "STRING" },
+                pan_number: { type: "STRING" },
+                gstin: { type: "STRING" },
+                exporter_name: { type: "STRING" },
+                exporter_type: { type: "STRING" },
+                exporter_address: {
+                  type: "OBJECT",
+                  properties: {
+                    line1: { type: "STRING" },
+                    line2: { type: "STRING" },
+                    city: { type: "STRING" },
+                    state_code: { type: "STRING" },
+                    pin_code: { type: "STRING" }
+                  }
+                }
+              }
+            },
+            consignment_metadata: {
+              type: "OBJECT",
+              properties: {
+                port_of_loading_locode: { type: "STRING" },
+                port_of_discharge_locode: { type: "STRING" },
+                country_of_destination_code: { type: "STRING" },
+                authorized_dealer_ad_code: { type: "STRING" },
+                state_of_origin: { type: "STRING" }
+              }
+            },
+            invoice_master: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  commercial_invoice_number: { type: "STRING" },
+                  invoice_date: { type: "STRING" },
+                  purchase_order_reference: { type: "STRING" },
+                  incoterms: { type: "STRING" },
+                  currency_code: { type: "STRING" },
+                  total_invoice_value: { type: "NUMBER" },
+                  freight_charges: { type: "NUMBER" },
+                  insurance_charges: { type: "NUMBER" },
+                  miscellaneous_charges: { type: "NUMBER" },
+                  line_items: {
+                    type: "ARRAY",
+                    items: {
+                      type: "OBJECT",
+                      properties: {
+                        item_sequence: { type: "NUMBER" },
+                        hs_code_8digit: { type: "STRING" },
+                        commercial_description: { type: "STRING" },
+                        quantity: { type: "NUMBER" },
+                        unit_of_measurement_uqc: { type: "STRING" },
+                        unit_price: { type: "NUMBER" },
+                        line_total_fob: { type: "NUMBER" },
+                        incentive_declarations: {
+                          type: "OBJECT",
+                          properties: {
+                            claim_rodtep: { type: "BOOLEAN" },
+                            claim_drawback: { type: "BOOLEAN" },
+                            drawback_serial_number: { type: "STRING" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            esanchit_supporting_documents: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  document_sequence: { type: "NUMBER" },
+                  document_type_code: { type: "STRING" },
+                  image_reference_number_irn: { type: "STRING" }
+                }
+              }
+            }
+          }
+        };
+
+        const edfSchema = {
+          type: "OBJECT",
+          properties: {
+            edf_header: {
+              type: "OBJECT",
+              properties: {
+                framework_version: { type: "STRING", enum: ["FEMA_2026_UNIFIED"] },
+                corporate_pan: { type: "STRING" },
+                iec_code: { type: "STRING" }
+              }
+            },
+            invoice_record: {
+              type: "OBJECT",
+              properties: {
+                invoice_number: { type: "STRING" },
+                invoice_date: { type: "STRING" },
+                contracted_currency: { type: "STRING" },
+                invoice_value_foreign_currency: { type: "NUMBER" },
+                invoice_value_inr: { type: "NUMBER" },
+                purpose_code_rbi: { type: "STRING" }
+              }
+            },
+            bank_remittance_firc_node: {
+              type: "OBJECT",
+              properties: {
+                inward_remittance_reference_number: { type: "STRING" },
+                realization_date: { type: "STRING" },
+                remitted_currency: { type: "STRING" },
+                gross_amount_received_foreign_currency: { type: "NUMBER" },
+                intermediary_bank_deductions: { type: "NUMBER" },
+                net_amount_credited_inr: { type: "NUMBER" },
+                authorized_dealer_bank_code: { type: "STRING" }
+              }
+            },
+            reconciliation_analytics: {
+              type: "OBJECT",
+              properties: {
+                calculated_variance_percentage: { type: "NUMBER" },
+                spread_exception_triggered: { type: "BOOLEAN" },
+                small_value_threshold_bypass: { type: "BOOLEAN" }
+              }
+            },
+            compliance_outputs: {
+              type: "OBJECT",
+              properties: {
+                gst_rfd01_payload_ready: { type: "BOOLEAN" },
+                edpms_token_closure_status: { type: "STRING" }
+              }
+            }
+          }
+        };
+
+        const targetSchema = flowType === 'GOODS_PHYSICAL' ? icegateSchema : edfSchema;
+
+        // Tariff Resolution Node: Real pgvector Lookup
+        let vectorContext = "Vector Lookup Resolution Results:\n";
+        try {
+          // Truncate text to avoid exceeding embedding token limits
+          const textForEmbedding = aggregatedTextContext.substring(0, 8000);
+          
+          const embeddingResponse = await aiStudio.models.embedContent({
+            model: 'text-embedding-004',
+            contents: textForEmbedding,
+          });
+          
+          const embedding = embeddingResponse.embeddings?.[0]?.values;
+          
+          if (!embedding) {
+            throw new Error("Failed to generate vector embeddings from GenAI");
+          }
+          // Query Supabase pgvector RPC
+          const { data: vectorResults, error: vectorError } = await supabase.rpc('match_hs_codes', {
+            query_embedding: `[${embedding.join(',')}]`,
+            match_threshold: 0.5,
+            match_count: 3
+          });
+          
+          if (!vectorError && vectorResults && vectorResults.length > 0) {
+            vectorResults.forEach((match: any) => {
+              vectorContext += `- High confidence match: ${match.hs_code} (${match.description})\n`;
+            });
+          } else {
+             vectorContext += "No highly confident semantic HS code matches found.\n";
+          }
+        } catch (embeddingError) {
+          console.error("Vector Semantic Search Error:", embeddingError);
+          // Fallback if API key has no embedding access
+          const lower = aggregatedTextContext.toLowerCase();
+          if (lower.includes('laptop') || lower.includes('computer')) vectorContext += "- Fallback match: 84713010 (Personal computers / Laptops)\n";
+          if (lower.includes('software') || lower.includes('consulting')) vectorContext += "- Fallback match: P0802 (Software Consultancy Services)\n";
+          if (lower.includes('cotton') || lower.includes('shirt')) vectorContext += "- Fallback match: 61091000 (T-shirts, singlets and other vests, of cotton)\n";
+        }
+
+        const contentsParts: any[] = [];
+        
+        // Feed the raw binary buffers directly to Gemini without Base64 URL padding
+        for (const file of files) {
+          if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+            const buffer = Buffer.from(await file.arrayBuffer());
+            contentsParts.push({
+              inlineData: {
+                data: buffer.toString('base64'),
+                mimeType: file.type
+              }
+            });
+          }
+        }
+        contentsParts.push({
+          text: `Telemetry Logs Data Body:\n${aggregatedTextContext}\n\n${vectorContext}`
+        });
+
+        const aiResponse = await aiStudio.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: contentsParts,
+          config: {
+            systemInstruction: systemInstruction,
+            temperature: 0.1, // Low temperature for deterministic schema generation
+            responseMimeType: 'application/json'
+          }
+        });
+
+        const rawJsonText = aiResponse.text?.trim() || '{}';
+        const extractedData = JSON.parse(rawJsonText);
+
+        let finalCompiledPayload = { ...extractedData };
+
+        // UQC Programmatic Normalization Dictionary for CACHE01 Master Directory mapping
+        const uqcDictionary: Record<string, string> = {
+          'pieces': 'PCS', 'piece': 'PCS', 'pcs': 'PCS', 'pc': 'PCS',
+          'sets': 'SET', 'set': 'SET',
+          'boxes': 'BOX', 'box': 'BOX',
+          'kilograms': 'KGS', 'kilogram': 'KGS', 'kgs': 'KGS', 'kg': 'KGS',
+          'grams': 'GMS', 'gram': 'GMS', 'gms': 'GMS', 'gm': 'GMS',
+          'liters': 'LTR', 'liter': 'LTR', 'litres': 'LTR', 'litre': 'LTR', 'ltr': 'LTR',
+          'meters': 'MTR', 'meter': 'MTR', 'mtr': 'MTR',
+          'rolls': 'ROL', 'roll': 'ROL', 'pallets': 'PAL', 'pallet': 'PAL',
+          'cartons': 'CTN', 'carton': 'CTN', 'ctn': 'CTN', 'ctns': 'CTN'
+        };
+
+        if (flowType === 'GOODS_PHYSICAL' && finalCompiledPayload.invoice_master) {
+          finalCompiledPayload.invoice_master.forEach((invoice: any) => {
+            if (invoice.line_items) {
+              invoice.line_items.forEach((item: any) => {
+                if (item.unit_of_measurement_uqc) {
+                  const rawUqc = item.unit_of_measurement_uqc.toString().toLowerCase().trim();
+                  // Apply programmatic master string mapping, fallback to uppercase trimmed value
+                  item.unit_of_measurement_uqc = uqcDictionary[rawUqc] || rawUqc.toUpperCase();
+                }
+              });
+            }
+          });
+        }
+
+        let finalStatus = 'READY_FOR_REVIEW';
+        
+        // Post-processing math check for FEMA boundaries (if AI didn't catch it precisely)
+        if (flowType === 'SERVICES_INTANGIBLE' && finalCompiledPayload.invoice_record && finalCompiledPayload.bank_remittance_firc_node) {
+          const baseInvoiceUsd = finalCompiledPayload.invoice_record.invoice_value_foreign_currency || 0;
+          const receivedWireUsd = finalCompiledPayload.bank_remittance_firc_node.gross_amount_received_foreign_currency || 0;
+          
+          let variancePct = 0;
+          if (baseInvoiceUsd > 0) {
+            variancePct = ((receivedWireUsd - baseInvoiceUsd) / baseInvoiceUsd) * 100;
+          }
+          
+          const spreadExceptionTriggered = Math.abs(variancePct) > 0.5;
+
+          finalCompiledPayload.reconciliation_analytics = {
+            ...finalCompiledPayload.reconciliation_analytics,
+            calculated_variance_percentage: parseFloat(variancePct.toFixed(3)),
+            spread_exception_triggered: spreadExceptionTriggered,
+            small_value_threshold_bypass: baseInvoiceUsd < 12000 // approx 10 Lakhs INR
+          };
+          
+          if (!finalCompiledPayload.compliance_outputs) {
+            finalCompiledPayload.compliance_outputs = {};
+          }
+          finalCompiledPayload.compliance_outputs.gst_rfd01_payload_ready = !spreadExceptionTriggered;
+          finalCompiledPayload.compliance_outputs.edpms_token_closure_status = spreadExceptionTriggered ? 'PENDING_VARIANCE_APPROVAL' : 'AUTO_CLOSED';
+          
+          // Step 4 state transition logic:
+          if (!spreadExceptionTriggered) {
+            finalStatus = 'SCHEMA_COMPILED';
+          }
+        } else if (flowType === 'GOODS_PHYSICAL') {
+          // Goods flow defaults to review unless fully automated
+          finalStatus = 'READY_FOR_REVIEW';
+        }
+
+        // Advance row traces state
+        await supabase
+          .from('transactions')
+          .update({
+            status: finalStatus,
+            compiled_government_payload: finalCompiledPayload,
+            raw_payload_context: { 
+              total_ingested_files: files.length,
+              files: fileDataUrls // Clean bucket URLs instead of raw Base64
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', txn.id);
+
+      } catch (innerError: any) {
+        // Transition records to FAILED state gracefully and logging exception tracking data safely
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'FAILED',
+            exception_logs: innerError?.message || 'Asynchronous Token Processing Exception Exception',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', txn.id);
+      }
+    };
+
+    // Execute out of band asynchronous background runner loop process instantly
+    backgroundTaskLoop();
+
+    return NextResponse.json({
+      message: 'Transaction telemetry queued for out-of-band validation processing',
+      transaction_id: txn.id,
+      status: 'PARSING'
+    }, { status: 202 });
+
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || 'Internal processing compute fault execution exception' }, { status: 500 });
+  }
+}
