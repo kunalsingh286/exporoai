@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenAI } from '@google/genai';
 
@@ -406,8 +406,8 @@ ${targetOutputInstruction}`;
       }
     };
 
-    // Execute out of band asynchronous background runner loop process instantly
-    backgroundTaskLoop();
+    // Execute out of band asynchronous background runner loop process instantly via Vercel's after()
+    after(() => backgroundTaskLoop());
 
     return NextResponse.json({
       message: 'Transaction telemetry queued for out-of-band validation processing',
