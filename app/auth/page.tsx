@@ -147,8 +147,8 @@ export default function AuthGate() {
               <input
                 type="text"
                 required
-                maxLength={6}
-                placeholder="0 0 0 0 0 0"
+                maxLength={8}
+                placeholder="0 0 0 0 0 0 0 0"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
                 className="w-full px-3 py-2 text-center text-lg tracking-[0.5em] font-mono bg-zinc-950 border border-zinc-800 rounded text-zinc-100 placeholder:text-zinc-800 focus:outline-none focus:border-zinc-700 transition"
