@@ -562,6 +562,18 @@ export default function Dashboard() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>V1 Active</span>
             </div>
+            <button 
+              onClick={async () => {
+                const newRole = userRole === 'CA' ? 'CHA' : 'CA';
+                await supabase.auth.updateUser({ data: { role: newRole } });
+                setUserRole(newRole);
+                setActiveTab(newRole === 'CA' ? 'services' : 'goods');
+                showToast(`Switched workspace to ${newRole}`);
+              }}
+              className="text-zinc-400 hover:text-white transition text-xs font-mono bg-zinc-900 hover:bg-zinc-800 px-3 py-1.5 rounded border border-zinc-800"
+            >
+              Switch to {userRole === 'CA' ? 'CHA' : 'CA'}
+            </button>
             <button className="text-zinc-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-900">
               ⚙️
             </button>
