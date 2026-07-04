@@ -162,14 +162,18 @@ export default function Dashboard() {
         return;
       }
 
+      const inv = parsed.invoice_record || {};
       const bank = parsed.bank_remittance_firc_node || {};
-      const compliance = parsed.compliance_outputs || {};
+      const analytics = parsed.reconciliation_analytics || {};
 
       const edpmsData = [
         {
-          "FIRC Number": bank.inward_remittance_reference_number,
-          "Realized Value (INR)": bank.net_amount_credited_inr,
-          "Closure Status": compliance.edpms_token_closure_status
+          "Invoice": inv.invoice_number || "",
+          "Date": inv.invoice_date || "",
+          "Bank Reference": bank.inward_remittance_reference_number || "",
+          "Purpose Code": inv.purpose_code_rbi || "",
+          "Reconciled Amount": bank.gross_amount_received_foreign_currency || 0,
+          "Variance": analytics.calculated_variance_percentage || 0
         }
       ];
 

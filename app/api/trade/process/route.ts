@@ -360,7 +360,7 @@ ${targetOutputInstruction}`;
             variancePct = ((receivedWireUsd - baseInvoiceUsd) / baseInvoiceUsd) * 100;
           }
           
-          const spreadExceptionTriggered = Math.abs(variancePct) > 0.5;
+          const spreadExceptionTriggered = Math.abs(variancePct) > 0.5 && baseInvoiceUsd >= 12000;
 
           finalCompiledPayload.reconciliation_analytics = {
             ...finalCompiledPayload.reconciliation_analytics,
