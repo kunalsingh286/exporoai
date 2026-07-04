@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 
         // Target Output Instructions perfectly matched to schemas
         const targetOutputInstruction = flowType === 'GOODS_PHYSICAL'
-          ? `{\n  "header": {\n    "schema_version": "2026.1",\n    "message_id": "CACHE01",\n    "custom_house_code": "",\n    "job_number": 0,\n    "job_date": ""\n  },\n  "exporter_profile": {\n    "iec_code": "",\n    "pan_number": "",\n    "gstin": "",\n    "exporter_name": "",\n    "exporter_type": "",\n    "exporter_address": {\n      "line1": "",\n      "line2": "",\n      "city": "",\n      "state_code": "",\n      "pin_code": ""\n    }\n  },\n  "consignment_metadata": {\n    "port_of_loading_locode": "",\n    "port_of_discharge_locode": "",\n    "country_of_destination_code": "",\n    "authorized_dealer_ad_code": "",\n    "state_of_origin": ""\n  },\n  "invoice_master": [\n    {\n      "commercial_invoice_number": "",\n      "invoice_date": "",\n      "purchase_order_reference": "",\n      "incoterms": "",\n      "currency_code": "",\n      "total_invoice_value": 0.0,\n      "freight_charges": 0.0,\n      "insurance_charges": 0.0,\n      "miscellaneous_charges": 0.0,\n      "line_items": [\n        {\n          "item_sequence": 0,\n          "hs_code_8digit": "",\n          "commercial_description": "",\n          "quantity": 0,\n          "unit_of_measurement_uqc": "",\n          "unit_price": 0.0,\n          "line_total_fob": 0.0,\n          "incentive_declarations": {\n            "claim_rodtep": false,\n            "claim_drawback": false,\n            "drawback_serial_number": ""\n          }\n        }\n      ]\n    }\n  ],\n  "esanchit_supporting_documents": [\n    {\n      "document_sequence": 0,\n      "document_type_code": "",\n      "image_reference_number_irn": ""\n    }\n  ]\n}`
+          ? `{\n  "invoiceModel": [\n    {\n      "invoiceNumber": "",\n      "invoiceDate": "",\n      "purchaseOrderNumber": "",\n      "termsOfPayment": "",\n      "currencyCode": "",\n      "itemModel": [\n        {\n          "hsCode": "",\n          "commercialDescription": "",\n          "quantity": "",\n          "unitOfMeasurement": "",\n          "unitPrice": ""\n        }\n      ]\n    }\n  ],\n  "containerModel": {\n    "containerNumber": "",\n    "sealNumber": "",\n    "packageCount": 0\n  }\n}`
           : `{\n  "edf_header": {\n    "framework_version": "FEMA_2026_UNIFIED",\n    "corporate_pan": "",\n    "iec_code": ""\n  },\n  "invoice_record": {\n    "invoice_number": "",\n    "invoice_date": "",\n    "contracted_currency": "",\n    "invoice_value_foreign_currency": 0.0,\n    "invoice_value_inr": 0.0,\n    "purpose_code_rbi": ""\n  },\n  "bank_remittance_firc_node": {\n    "inward_remittance_reference_number": "",\n    "realization_date": "",\n    "remitted_currency": "",\n    "gross_amount_received_foreign_currency": 0.0,\n    "intermediary_bank_deductions": 0.0,\n    "net_amount_credited_inr": 0.0,\n    "authorized_dealer_bank_code": ""\n  },\n  "reconciliation_analytics": {\n    "calculated_variance_percentage": 0.0,\n    "spread_exception_triggered": false,\n    "small_value_threshold_bypass": false\n  },\n  "compliance_outputs": {\n    "gst_rfd01_payload_ready": false,\n    "edpms_token_closure_status": ""\n  }\n}`;
 
         const systemInstruction = `You are the primary schema synthesis core for ExporoAI, an enterprise cross-border operating system running under 2026 Indian regulatory rules. Analyze the provided unstructured trade assets character-by-character. Extract all available trade parameters. Do not assume or guess values; if a parameter is missing, return an empty string. Programmatically evaluate conversion fees to see if they break the +/-0.5% FEMA boundary. Your absolute requirement is to output a valid JSON object that adheres strictly to the specified target schema:
@@ -103,95 +103,38 @@ ${targetOutputInstruction}`;
         const icegateSchema = {
           type: "OBJECT",
           properties: {
-            header: {
-              type: "OBJECT",
-              properties: {
-                schema_version: { type: "STRING", enum: ["2026.1"] },
-                message_id: { type: "STRING", enum: ["CACHE01"] },
-                custom_house_code: { type: "STRING" },
-                job_number: { type: "NUMBER" },
-                job_date: { type: "STRING" }
-              }
-            },
-            exporter_profile: {
-              type: "OBJECT",
-              properties: {
-                iec_code: { type: "STRING" },
-                pan_number: { type: "STRING" },
-                gstin: { type: "STRING" },
-                exporter_name: { type: "STRING" },
-                exporter_type: { type: "STRING" },
-                exporter_address: {
-                  type: "OBJECT",
-                  properties: {
-                    line1: { type: "STRING" },
-                    line2: { type: "STRING" },
-                    city: { type: "STRING" },
-                    state_code: { type: "STRING" },
-                    pin_code: { type: "STRING" }
-                  }
-                }
-              }
-            },
-            consignment_metadata: {
-              type: "OBJECT",
-              properties: {
-                port_of_loading_locode: { type: "STRING" },
-                port_of_discharge_locode: { type: "STRING" },
-                country_of_destination_code: { type: "STRING" },
-                authorized_dealer_ad_code: { type: "STRING" },
-                state_of_origin: { type: "STRING" }
-              }
-            },
-            invoice_master: {
+            invoiceModel: {
               type: "ARRAY",
               items: {
                 type: "OBJECT",
                 properties: {
-                  commercial_invoice_number: { type: "STRING" },
-                  invoice_date: { type: "STRING" },
-                  purchase_order_reference: { type: "STRING" },
-                  incoterms: { type: "STRING" },
-                  currency_code: { type: "STRING" },
-                  total_invoice_value: { type: "NUMBER" },
-                  freight_charges: { type: "NUMBER" },
-                  insurance_charges: { type: "NUMBER" },
-                  miscellaneous_charges: { type: "NUMBER" },
-                  line_items: {
+                  invoiceNumber: { type: "STRING" },
+                  invoiceDate: { type: "STRING" },
+                  purchaseOrderNumber: { type: "STRING" },
+                  termsOfPayment: { type: "STRING" },
+                  currencyCode: { type: "STRING" },
+                  itemModel: {
                     type: "ARRAY",
                     items: {
                       type: "OBJECT",
                       properties: {
-                        item_sequence: { type: "NUMBER" },
-                        hs_code_8digit: { type: "STRING" },
-                        commercial_description: { type: "STRING" },
-                        quantity: { type: "NUMBER" },
-                        unit_of_measurement_uqc: { type: "STRING" },
-                        unit_price: { type: "NUMBER" },
-                        line_total_fob: { type: "NUMBER" },
-                        incentive_declarations: {
-                          type: "OBJECT",
-                          properties: {
-                            claim_rodtep: { type: "BOOLEAN" },
-                            claim_drawback: { type: "BOOLEAN" },
-                            drawback_serial_number: { type: "STRING" }
-                          }
-                        }
+                        hsCode: { type: "STRING" },
+                        commercialDescription: { type: "STRING" },
+                        quantity: { type: "STRING" },
+                        unitOfMeasurement: { type: "STRING" },
+                        unitPrice: { type: "STRING" }
                       }
                     }
                   }
                 }
               }
             },
-            esanchit_supporting_documents: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  document_sequence: { type: "NUMBER" },
-                  document_type_code: { type: "STRING" },
-                  image_reference_number_irn: { type: "STRING" }
-                }
+            containerModel: {
+              type: "OBJECT",
+              properties: {
+                containerNumber: { type: "STRING" },
+                sealNumber: { type: "STRING" },
+                packageCount: { type: "NUMBER" }
               }
             }
           }
@@ -317,14 +260,19 @@ ${targetOutputInstruction}`;
           }
         });
 
-        const rawJsonText = aiResponse.text?.trim() || '{}';
-        const extractedData = JSON.parse(rawJsonText);
+        let rawJsonText = aiResponse.text?.trim() || '{}';
+        
+        // Ingestion Cleaning Layer: Strip markdown code blocks
+        if (rawJsonText.startsWith('```')) {
+          rawJsonText = rawJsonText.replace(/^```(json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+        }
 
+        const extractedData = JSON.parse(rawJsonText);
         let finalCompiledPayload = { ...extractedData };
 
         // UQC Programmatic Normalization Dictionary for CACHE01 Master Directory mapping
         const uqcDictionary: Record<string, string> = {
-          'pieces': 'PCS', 'piece': 'PCS', 'pcs': 'PCS', 'pc': 'PCS',
+          'pieces': 'PCS', 'piece': 'PCS', 'pcs': 'PCS', 'numbers': 'PCS', 'number': 'PCS', 'nos': 'PCS',
           'sets': 'SET', 'set': 'SET',
           'boxes': 'BOX', 'box': 'BOX',
           'kilograms': 'KGS', 'kilogram': 'KGS', 'kgs': 'KGS', 'kg': 'KGS',
@@ -335,18 +283,50 @@ ${targetOutputInstruction}`;
           'cartons': 'CTN', 'carton': 'CTN', 'ctn': 'CTN', 'ctns': 'CTN'
         };
 
-        if (flowType === 'GOODS_PHYSICAL' && finalCompiledPayload.invoice_master) {
-          finalCompiledPayload.invoice_master.forEach((invoice: any) => {
-            if (invoice.line_items) {
-              invoice.line_items.forEach((item: any) => {
-                if (item.unit_of_measurement_uqc) {
-                  const rawUqc = item.unit_of_measurement_uqc.toString().toLowerCase().trim();
-                  // Apply programmatic master string mapping, fallback to uppercase trimmed value
-                  item.unit_of_measurement_uqc = uqcDictionary[rawUqc] || rawUqc.toUpperCase();
+        if (flowType === 'GOODS_PHYSICAL') {
+          // Mathematical Gates & Invariances
+          const invoiceModel = finalCompiledPayload.invoiceModel || [];
+          
+          invoiceModel.forEach((invoice: any) => {
+            if (invoice.itemModel) {
+              let currentSequence = 1;
+              invoice.itemModel.forEach((item: any) => {
+                // Auto-increment sequence
+                item.itemSequence = currentSequence++;
+                
+                // UQC Normalization
+                if (item.unitOfMeasurement) {
+                  const rawUqc = item.unitOfMeasurement.toString().toLowerCase().trim();
+                  item.unitOfMeasurement = uqcDictionary[rawUqc] || rawUqc.toUpperCase();
                 }
+
+                // Clean formatting and cast to float
+                const cleanQuantity = parseFloat(item.quantity?.toString().replace(/[^\d.]/g, '') || '0');
+                const cleanUnitPrice = parseFloat(item.unitPrice?.toString().replace(/[^\d.]/g, '') || '0');
+                
+                item.quantity = cleanQuantity;
+                item.unitPrice = cleanUnitPrice;
+                
+                // Deterministic Math Node
+                item.fobValue = parseFloat((cleanQuantity * cleanUnitPrice).toFixed(2));
               });
             }
           });
+
+          // Compile Three-Tier Separation Pipeline Envelope
+          finalCompiledPayload = {
+            headerField: {
+              msgId: "EXPOROAI-" + Date.now(),
+              version: "2026.1",
+              msgSource: "CHA_WEDGE",
+              senderId: "EXPOROAI_SYS"
+            },
+            master: {
+              invoiceModel: invoiceModel,
+              containerModel: finalCompiledPayload.containerModel || {}
+            },
+            digSign: []
+          };
         }
 
         let finalStatus = 'READY_FOR_REVIEW';
