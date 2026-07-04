@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing mandatory payload properties' }, { status: 400 });
     }
 
+    if (flowType === 'SERVICES_INTANGIBLE' && files.length < 2) {
+      return NextResponse.json({ error: 'Reconciliation requires at least 2 contrasting documents (Invoice + SWIFT/FIRC).' }, { status: 400 });
+    }
+
     // CRITICAL FIX: Read all file buffers into memory BEFORE the response is sent and Next.js destroys the request context and temp files.
     const preloadedFiles = await Promise.all(
       files.map(async (file) => ({

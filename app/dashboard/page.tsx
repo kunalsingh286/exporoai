@@ -82,11 +82,19 @@ export default function Dashboard() {
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0 || !profileId) return;
+
+    const flowType = activeTab === 'services' ? 'SERVICES_INTANGIBLE' : 'GOODS_PHYSICAL';
+    
+    if (flowType === 'SERVICES_INTANGIBLE' && files.length < 2) {
+      showToast('Reconciliation requires at least 2 contrasting documents (Invoice + SWIFT/FIRC).', 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     setIsUploading(true);
 
     const formData = new FormData();
     formData.append('profileId', profileId);
-    const flowType = activeTab === 'services' ? 'SERVICES_INTANGIBLE' : 'GOODS_PHYSICAL';
     formData.append('flowType', flowType);
 
     for (let i = 0; i < files.length; i++) {
