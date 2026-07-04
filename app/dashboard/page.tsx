@@ -122,12 +122,18 @@ export default function Dashboard() {
     try {
       setIsSaving(true);
       const parsed = JSON.parse(editorText);
+      
+      let newStatus = selectedTxn.status;
+      if (selectedTxn.flow_type === 'SERVICES_INTANGIBLE' && !parsed.reconciliation_analytics?.spread_exception_triggered) {
+        newStatus = 'SCHEMA_COMPILED';
+      }
+
       await supabase
         .from('transactions')
-        .update({ compiled_government_payload: parsed })
+        .update({ compiled_government_payload: parsed, status: newStatus })
         .eq('id', selectedTxn.id);
 
-      setSelectedTxn({ ...selectedTxn, compiled_government_payload: parsed });
+      setSelectedTxn({ ...selectedTxn, compiled_government_payload: parsed, status: newStatus });
       showToast('Schema overrides saved to ledger.');
       fetchTransactions(profileId as string, userRole);
     } catch (e) {
@@ -268,10 +274,18 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <button onClick={() => downloadBankArrayXlsx(`AD_BANK_ARRAY_${selectedTxn.id.split('-')[0]}.xlsx`, selectedTxn.id)} className="px-4 py-2 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-blue-900/20 border border-blue-400/20 flex items-center space-x-2">
+                <button 
+                  onClick={() => downloadBankArrayXlsx(`AD_BANK_ARRAY_${selectedTxn.id.split('-')[0]}.xlsx`, selectedTxn.id)} 
+                  disabled={selectedTxn.status === 'READY_FOR_REVIEW'}
+                  className="px-4 py-2 bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-blue-900/20 border border-blue-400/20 flex items-center space-x-2"
+                >
                   <span>🏦</span><span>AD Bank Array (.xlsx)</span>
                 </button>
-                <button onClick={() => downloadGstRfd01Xlsx(`GST_RFD01_MATRIX_${selectedTxn.id.split('-')[0]}.xlsx`, selectedTxn.id)} className="px-4 py-2 bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-emerald-900/20 border border-emerald-400/20 flex items-center space-x-2">
+                <button 
+                  onClick={() => downloadGstRfd01Xlsx(`GST_RFD01_MATRIX_${selectedTxn.id.split('-')[0]}.xlsx`, selectedTxn.id)} 
+                  disabled={selectedTxn.status === 'READY_FOR_REVIEW'}
+                  className="px-4 py-2 bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition shadow-lg shadow-emerald-900/20 border border-emerald-400/20 flex items-center space-x-2"
+                >
                   <span>🏛️</span><span>GST RFD-01 Sheet (.xlsx)</span>
                 </button>
               </>
@@ -364,12 +378,17 @@ export default function Dashboard() {
                       current[path[path.length - 1]] = value;
                       
                       // Auto-recalculate variance if invoice or wire changes
-                      if (path.includes('invoice_value_foreign_currency') || path.includes('gross_amount_received_foreign_currency')) {
+                      if (path.includes('invoice_value_foreign_currency') || path.includes('gross_amount_received_foreign_currency') || path.includes('intermediary_bank_deductions')) {
                         const invVal = newData.invoice_record?.invoice_value_foreign_currency || 0;
                         const recvVal = newData.bank_remittance_firc_node?.gross_amount_received_foreign_currency || 0;
-                        const delta = invVal - recvVal;
-                        const pct = invVal > 0 ? (Math.abs(delta) / invVal) * 100 : 0;
-                        const exc = pct > 0.5;
+                        const feeVal = newData.bank_remittance_firc_node?.intermediary_bank_deductions || 0;
+                        
+                        let pct = 0;
+                        if (invVal > 0) {
+                          pct = (((recvVal + feeVal) - invVal) / invVal) * 100;
+                        }
+                        
+                        const exc = Math.abs(pct) > 0.5 && invVal >= 12000;
                         
                         if (!newData.reconciliation_analytics) newData.reconciliation_analytics = {};
                         newData.reconciliation_analytics.calculated_variance_percentage = parseFloat(pct.toFixed(3));
@@ -406,7 +425,7 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-[10px] uppercase text-zinc-500 mb-1">FIRC UTR Reference</label>
                             <input 
@@ -423,6 +442,15 @@ export default function Dashboard() {
                               className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" 
                               value={data.bank_remittance_firc_node?.gross_amount_received_foreign_currency || 0} 
                               onChange={(e) => updateField(['bank_remittance_firc_node', 'gross_amount_received_foreign_currency'], parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] uppercase text-emerald-500 font-bold mb-1">Bank Fee Deductions</label>
+                            <input 
+                              type="number" 
+                              className="w-full bg-emerald-950/20 border border-emerald-900/50 rounded px-3 py-2 text-sm text-emerald-100 focus:outline-none focus:border-emerald-500 transition-colors shadow-inner" 
+                              value={data.bank_remittance_firc_node?.intermediary_bank_deductions || 0} 
+                              onChange={(e) => updateField(['bank_remittance_firc_node', 'intermediary_bank_deductions'], parseFloat(e.target.value))}
                             />
                           </div>
                         </div>
