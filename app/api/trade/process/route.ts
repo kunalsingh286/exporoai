@@ -290,7 +290,22 @@ ${targetOutputInstruction}`;
           invoiceModel.forEach((invoice: any) => {
             if (invoice.itemModel) {
               let currentSequence = 1;
-              invoice.itemModel.forEach((item: any) => {
+              const normalizedItems: any[] = [];
+              
+              invoice.itemModel.forEach((rawItem: any) => {
+                // Ensure zero whitespace keys in item mapping
+                const item: any = {};
+                for (const key in rawItem) {
+                  // Catch Gemini hallucinating spaces in keys
+                  let cleanKey = key;
+                  if (key.toLowerCase() === 'commercial description') {
+                    cleanKey = 'commercialDescription';
+                  } else {
+                    cleanKey = key.replace(/\s+/g, '');
+                  }
+                  item[cleanKey] = rawItem[key];
+                }
+
                 // Auto-increment sequence
                 item.itemSequence = currentSequence++;
                 
@@ -309,7 +324,11 @@ ${targetOutputInstruction}`;
                 
                 // Deterministic Math Node
                 item.fobValue = parseFloat((cleanQuantity * cleanUnitPrice).toFixed(2));
+                
+                normalizedItems.push(item);
               });
+              
+              invoice.itemModel = normalizedItems;
             }
           });
 
