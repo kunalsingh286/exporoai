@@ -23,6 +23,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing mandatory payload properties' }, { status: 400 });
     }
 
+    // CRITICAL FIX: Read all file buffers into memory BEFORE the response is sent and Next.js destroys the request context and temp files.
+    const preloadedFiles = await Promise.all(
+      files.map(async (file) => ({
+        name: file.name,
+        type: file.type,
+        buffer: Buffer.from(await file.arrayBuffer())
+      }))
+    );
+
     // TASK 3.1: Initialize transaction entry inside Supabase to yield immediate execution row trace ID
     const { data: txn, error: txnInsertError } = await supabase
       .from('transactions')
@@ -47,10 +56,8 @@ export async function POST(req: NextRequest) {
         let aggregatedTextContext = '';
         let fileDataUrls: { name: string, type: string, url: string, path: string }[] = [];
 
-        for (const file of files) {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          const fileType = file.type;
-          const fileName = file.name;
+        for (const file of preloadedFiles) {
+          const { buffer, type: fileType, name: fileName } = file;
 
           // Upload to Supabase Storage Bucket securely via RLS
           const safeName = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
@@ -286,12 +293,11 @@ ${targetOutputInstruction}`;
         const contentsParts: any[] = [];
         
         // Feed the raw binary buffers directly to Gemini without Base64 URL padding
-        for (const file of files) {
+        for (const file of preloadedFiles) {
           if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-            const buffer = Buffer.from(await file.arrayBuffer());
             contentsParts.push({
               inlineData: {
-                data: buffer.toString('base64'),
+                data: file.buffer.toString('base64'),
                 mimeType: file.type
               }
             });
