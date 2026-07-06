@@ -292,6 +292,11 @@ ${targetOutputInstruction}`;
           const invoiceModel = finalCompiledPayload.invoiceModel || [];
           
           invoiceModel.forEach((invoice: any) => {
+            // Missing Parameter Interception (Top Level)
+            invoice.invoiceNumber = invoice.invoiceNumber || 'REQUIRED_FIELD_MISSING';
+            invoice.invoiceDate = invoice.invoiceDate || 'REQUIRED_FIELD_MISSING';
+            invoice.currencyCode = invoice.currencyCode || 'REQUIRED_FIELD_MISSING';
+            
             if (invoice.itemModel) {
               let currentSequence = 1;
               const normalizedItems: any[] = [];
@@ -307,7 +312,9 @@ ${targetOutputInstruction}`;
                   } else {
                     cleanKey = key.replace(/\s+/g, '');
                   }
-                  item[cleanKey] = rawItem[key];
+                  
+                  const val = rawItem[key];
+                  item[cleanKey] = (val === null || val === undefined || val === '') ? 'REQUIRED_FIELD_MISSING' : val;
                 }
 
                 // Auto-increment sequence
@@ -356,8 +363,16 @@ ${targetOutputInstruction}`;
         
         // Post-processing math check for FEMA boundaries (if AI didn't catch it precisely)
         if (flowType === 'SERVICES_INTANGIBLE' && finalCompiledPayload.invoice_record && finalCompiledPayload.bank_remittance_firc_node) {
-          const baseInvoiceUsd = finalCompiledPayload.invoice_record.invoice_value_foreign_currency || 0;
-          const receivedWireUsd = finalCompiledPayload.bank_remittance_firc_node.gross_amount_received_foreign_currency || 0;
+          // Strict scrubbing of stray characters (e.g. "$15,000" -> 15000) and precision bounding
+          const rawBase = finalCompiledPayload.invoice_record.invoice_value_foreign_currency || 0;
+          const rawReceived = finalCompiledPayload.bank_remittance_firc_node.gross_amount_received_foreign_currency || 0;
+          
+          const baseInvoiceUsd = parseFloat(Number(parseFloat(String(rawBase).replace(/[^\d.]/g, '')) || 0).toFixed(2));
+          const receivedWireUsd = parseFloat(Number(parseFloat(String(rawReceived).replace(/[^\d.]/g, '')) || 0).toFixed(2));
+          
+          // Overwrite raw extracted values with sanitized floats for safe propagation
+          finalCompiledPayload.invoice_record.invoice_value_foreign_currency = baseInvoiceUsd;
+          finalCompiledPayload.bank_remittance_firc_node.gross_amount_received_foreign_currency = receivedWireUsd;
           
           let variancePct = 0;
           if (baseInvoiceUsd > 0) {

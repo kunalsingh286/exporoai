@@ -186,8 +186,8 @@ export default function Dashboard() {
           "Date": inv.invoice_date || "",
           "Bank Reference": bank.inward_remittance_reference_number || "",
           "Purpose Code": inv.purpose_code_rbi || "",
-          "Reconciled Amount": bank.gross_amount_received_foreign_currency || 0,
-          "Variance": analytics.calculated_variance_percentage || 0
+          "Reconciled Amount": parseFloat(Number(bank.gross_amount_received_foreign_currency || 0).toFixed(2)),
+          "Variance": parseFloat(Number(analytics.calculated_variance_percentage || 0).toFixed(3))
         }
       ];
 
@@ -219,10 +219,10 @@ export default function Dashboard() {
         {
           "Invoice Number": inv.invoice_number,
           "Contracted Currency": inv.contracted_currency,
-          "Invoice USD": inv.invoice_value_foreign_currency,
+          "Invoice USD": parseFloat(Number(inv.invoice_value_foreign_currency || 0).toFixed(2)),
           "FIRC Number": bank.inward_remittance_reference_number,
-          "Received USD": bank.gross_amount_received_foreign_currency,
-          "Variance %": analytics.calculated_variance_percentage,
+          "Received USD": parseFloat(Number(bank.gross_amount_received_foreign_currency || 0).toFixed(2)),
+          "Variance %": parseFloat(Number(analytics.calculated_variance_percentage || 0).toFixed(3)),
           "Spread Exception": analytics.spread_exception_triggered,
           "GST Ready": compliance.gst_rfd01_payload_ready
         }
