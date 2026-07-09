@@ -486,13 +486,13 @@ export default function Dashboard() {
                 })()}
               </div>
             ) : (
-              <div className="flex-1 bg-[#0d0d0d] border border-zinc-800/80 rounded-xl overflow-hidden flex flex-col shadow-2xl relative group">
+              <div className="flex-1 bg-[#0d1117] border border-zinc-800/80 rounded-xl overflow-hidden flex flex-col shadow-2xl relative group">
                 {/* Mac-Style Code Window */}
-                <div className="h-8 bg-zinc-900/50 border-b border-zinc-800/50 flex items-center px-4 space-x-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
-                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
-                  <div className="mx-auto font-mono text-[10px] text-zinc-500 tracking-wider">payload.json</div>
+                <div className="h-10 bg-[#161b22] border-b border-zinc-800/50 flex items-center px-4 space-x-2">
+                  <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e]"></div>
+                  <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123]"></div>
+                  <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29]"></div>
+                  <div className="mx-auto font-mono text-xs text-zinc-400 tracking-wider">payload.json</div>
                 </div>
                 <textarea
                   className="flex-1 w-full h-full bg-transparent text-emerald-400/90 font-mono text-[13px] leading-relaxed p-6 resize-none focus:outline-none selection:bg-emerald-500/30"
@@ -626,7 +626,7 @@ export default function Dashboard() {
         {/* Scrollable Workspace */}
         <div className="flex-1 overflow-auto p-10 relative">
           {/* Subtle background glow */}
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+          <div className={`absolute top-0 left-1/4 w-[500px] h-[500px] rounded-full blur-[120px] pointer-events-none transition-all duration-1000 ${userRole === 'CA' ? 'bg-blue-500/5' : 'bg-emerald-500/5'}`}></div>
 
           <div className="max-w-6xl mx-auto space-y-10 relative z-10">
 
@@ -672,27 +672,27 @@ export default function Dashboard() {
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
               onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleFileUpload(e.dataTransfer.files); }}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative border-2 border-dashed rounded-3xl p-16 text-center transition-all duration-300 group cursor-pointer overflow-hidden
+              className={`relative border border-zinc-800/50 rounded-3xl p-16 text-center transition-all duration-500 group cursor-pointer overflow-hidden backdrop-blur-md shadow-2xl
                 ${isUploading 
-                  ? 'border-emerald-500/50 bg-emerald-500/5 shadow-[0_0_50px_-12px_rgba(16,185,129,0.15)] scale-[0.99]' 
-                  : 'border-zinc-800 hover:border-emerald-500/30 bg-zinc-900/10 hover:bg-zinc-900/30'}`}
+                  ? 'border-emerald-500/50 bg-emerald-500/10 shadow-[0_0_80px_-12px_rgba(16,185,129,0.2)] scale-[0.99]' 
+                  : `bg-zinc-900/40 hover:bg-zinc-900/60 hover:shadow-[0_0_50px_-12px_rgba(255,255,255,0.05)] ${userRole === 'CA' ? 'hover:border-blue-500/40' : 'hover:border-emerald-500/40'}`}`}
             >
               <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e.target.files)} className="hidden" multiple />
               
               <div className="relative z-10 flex flex-col items-center justify-center">
-                <div className={`w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center text-3xl mb-6 shadow-xl transition-all duration-500 ${isUploading ? 'animate-bounce border-emerald-500/50 shadow-emerald-500/20' : 'group-hover:-translate-y-2 group-hover:shadow-2xl'}`}>
+                <div className={`w-20 h-20 bg-zinc-950 border border-zinc-800 rounded-2xl flex items-center justify-center text-3xl mb-6 shadow-2xl transition-all duration-500 ${isUploading ? 'animate-bounce border-emerald-500/50 shadow-emerald-500/20' : 'group-hover:-translate-y-2 group-hover:shadow-emerald-900/20'}`}>
                   {isUploading ? '⚙️' : '📄'}
                 </div>
                 
-                <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">
+                <h3 className="text-2xl font-bold text-white mb-3 tracking-tight drop-shadow-md">
                   {isUploading ? 'Ingesting and Parsing via Super-Compiler...' : 'Smart Drop-Zone'}
                 </h3>
-                <p className="text-zinc-400 text-sm max-w-lg mx-auto mb-8 leading-relaxed">
+                <p className="text-zinc-400 text-sm max-w-lg mx-auto mb-8 leading-relaxed font-medium">
                   {userRole === 'CA'
                     ? 'Drag and drop unstructured commercial invoices, SWIFT MT103 logs, or FIRC PDFs here. The AI will instantly parse and validate them against FEMA boundaries.'
                     : 'Drag and drop unstructured commercial invoices, packing lists, or factory receipts here. The AI will extract fields and map 8-digit HS Tariff Codes automatically.'}
                 </p>
-                <button disabled={isUploading} className="px-8 py-3 bg-white text-zinc-950 font-bold rounded-xl text-sm hover:bg-zinc-200 transition-all shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_-5px_rgba(255,255,255,0.5)] disabled:opacity-50 disabled:shadow-none">
+                <button disabled={isUploading} className="px-8 py-3 bg-white text-zinc-950 font-bold rounded-xl text-sm hover:bg-zinc-200 transition-all shadow-[0_0_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_-5px_rgba(255,255,255,0.6)] disabled:opacity-50 disabled:shadow-none border border-zinc-200">
                   Select Files
                 </button>
               </div>
@@ -755,14 +755,15 @@ export default function Dashboard() {
                           <td className="px-8 py-5 text-zinc-400 truncate max-w-[200px]">
                             {txn.raw_payload_context?.total_ingested_files || 1} file(s)
                           </td>
-                          <td className="px-8 py-5 text-right">
-                            <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-md border shadow-sm flex inline-flex items-center space-x-1.5 ml-auto w-max
-                                ${txn.status === 'COMPILED' || txn.status === 'SCHEMA_COMPILED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-                                txn.status === 'READY_FOR_REVIEW' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                                  txn.status === 'PARSING' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400' :
-                                    'bg-red-500/10 border-red-500/20 text-red-400'
-                              }`}>
-                              {txn.status === 'PARSING' && <span className="w-1 h-1 rounded-full bg-yellow-400 animate-ping mr-1"></span>}
+                          <td className="px-8 py-5 text-right relative">
+                            <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-md border shadow-sm flex inline-flex items-center space-x-2 ml-auto w-max
+                                ${txn.status === 'COMPILED' || txn.status === 'SCHEMA_COMPILED' ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_-3px_rgba(16,185,129,0.3)]' :
+                                txn.status === 'READY_FOR_REVIEW' ? 'bg-amber-950/40 border-amber-500/50 text-amber-400 shadow-[0_0_15px_-3px_rgba(245,158,11,0.3)]' :
+                                  txn.status === 'PARSING' ? 'bg-zinc-900/80 border-zinc-700 text-zinc-400' :
+                                    'bg-red-950/40 border-red-500/50 text-red-400'
+                                }`}>
+                              {(txn.status === 'READY_FOR_REVIEW') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping absolute -ml-4"></span>}
+                              {(txn.status === 'PARSING') && <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-pulse mr-1"></span>}
                               <span>{txn.status.replace(/_/g, ' ')}</span>
                             </span>
                           </td>
