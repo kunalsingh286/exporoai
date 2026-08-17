@@ -6,37 +6,37 @@ This document provides a high-level architectural overview of the ExporoAI Trade
 
 ```mermaid
 graph TB
-    subgraph Client["Client Layer"]
+    subgraph Client["👤 Client Layer"]
         UI["Web UI / Dashboard"]
         CLI["CLI Interface"]
     end
     
-    subgraph API["API Gateway & Services"]
+    subgraph API["🔐 API Gateway & Services"]
         Gateway["API Gateway"]
         Auth["Authentication Service"]
         Routing["Request Routing"]
     end
     
-    subgraph Core["Core Business Logic"]
+    subgraph Core["⚙️ Core Business Logic"]
         TradingEngine["Trading Engine"]
         DPILinker["DPI Linker"]
         AIEngine["AI Native Engine"]
         MarketAnalysis["Market Analysis"]
     end
     
-    subgraph DataLayer["Data Layer"]
+    subgraph DataLayer["💾 Data Layer"]
         Cache["Cache Layer"]
         Database["Primary Database"]
         DataWarehouse["Data Warehouse"]
     end
     
-    subgraph External["External Integrations"]
+    subgraph External["🌐 External Integrations"]
         DPI["DPI Data Sources"]
         MarketData["Market Data Feeds"]
         ExchangeAPI["Exchange APIs"]
     end
     
-    subgraph ML["Machine Learning"]
+    subgraph ML["🤖 Machine Learning"]
         Models["ML Models"]
         Training["Model Training"]
         Inference["Inference Engine"]
@@ -62,6 +62,20 @@ graph TB
     ML -->|Update| Models
     Models -->|Run| Inference
     Inference -->|Results| Core
+    
+    classDef clientStyle fill:#e1f5ff,stroke:#01579b,stroke-width:2px,color:#000
+    classDef apiStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,color:#000
+    classDef coreStyle fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+    classDef dataStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000
+    classDef externalStyle fill:#ffe0b2,stroke:#bf360c,stroke-width:2px,color:#000
+    classDef mlStyle fill:#f1f8e9,stroke:#33691e,stroke-width:2px,color:#000
+    
+    class UI,CLI clientStyle
+    class Gateway,Auth,Routing apiStyle
+    class TradingEngine,DPILinker,AIEngine,MarketAnalysis coreStyle
+    class Cache,Database,DataWarehouse dataStyle
+    class DPI,MarketData,ExchangeAPI externalStyle
+    class Models,Training,Inference mlStyle
 ```
 
 ## Component Descriptions
